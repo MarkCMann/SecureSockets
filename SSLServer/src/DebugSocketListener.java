@@ -1,5 +1,4 @@
 
-
 public class DebugSocketListener implements SocketConnectionListener {
 
 	private SocketConnection connection;
