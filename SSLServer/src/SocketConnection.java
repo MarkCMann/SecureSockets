@@ -2,7 +2,6 @@
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketException;
@@ -27,17 +26,8 @@ public final class SocketConnection {
 	 * @param host
 	 * @param listener
 	 */
-	public SocketConnection(String host, SocketConnectionListener listener) {
-		this(new InetSocketAddress(host, Server.PORT_NUMBER), listener);
-	}
-	
-	/**
-	 * 
-	 * @param host
-	 * @param listener
-	 */
-	public SocketConnection(InetAddress host, SocketConnectionListener listener) {
-		this(new InetSocketAddress(host, Server.PORT_NUMBER), listener);
+	public SocketConnection(String host, SocketConnectionListener listener, final int port) {
+		this(new InetSocketAddress(host, port), listener);
 	}
 	
 	/**
@@ -46,18 +36,8 @@ public final class SocketConnection {
 	 * @param listener
 	 * @param context
 	 */
-	public SocketConnection(String host, SocketConnectionListener listener, SSLContext context) {
-		this(new InetSocketAddress(host, Server.PORT_NUMBER), listener, context);
-	}
-	
-	/**
-	 * 
-	 * @param host
-	 * @param listener
-	 * @param context
-	 */
-	public SocketConnection(InetAddress host, SocketConnectionListener listener, SSLContext context) {
-		this(new InetSocketAddress(host, Server.PORT_NUMBER), listener, context);
+	public SocketConnection(String host, SocketConnectionListener listener, SSLContext context, final int port) {
+		this(new InetSocketAddress(host, port), listener, context);
 	}
 	
 	private SocketConnection(InetSocketAddress socketAddress, SocketConnectionListener listener) {
