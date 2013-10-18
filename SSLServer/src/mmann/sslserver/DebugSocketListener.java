@@ -1,3 +1,4 @@
+package mmann.sslserver;
 
 public class DebugSocketListener implements SocketConnectionListener {
 

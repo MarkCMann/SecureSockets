@@ -2,6 +2,8 @@
  * A server class that implements SSL socket security.
  */
 
+package mmann.sslserver;
+
 import java.io.File;
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -15,21 +17,20 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLServerSocketFactory;
 
 /**
- * 
+ * This class will create a server socket and then begin listening for connections.
  * @author Mark
- * This class will create a server socket and then listen on port 4444.
+ * @version 1
  */
 public class Server implements SocketConnectionListener {
 	
 	/**
-	 * A flag for indicating whether or not this 
-	 * server is listening on its port.
+	 * A flag for indicating whether or not this server is listening on its
+	 * port.
 	 */
 	private volatile boolean isListening;
 	
 	/**
-	 * The server socket factory to create 
-	 * the server sockets from.
+	 * The server socket factory to create the server sockets from.
 	 */
 	private final ServerSocketFactory factory;
 	
@@ -49,8 +50,8 @@ public class Server implements SocketConnectionListener {
 	private ServerSocket serverSocket;
 	
 	/**
-	 * The maximum amount of time that the server 
-	 * thread an live without being joined.
+	 * The maximum amount of time that the server thread an live without being
+	 * joined.
 	 */
 	private final static int MAX_SERVER_JOIN_TIME = 1000;
 	
@@ -72,19 +73,21 @@ public class Server implements SocketConnectionListener {
 	/**
 	 * The default port that the server listens on.
 	 */
-	private static final int DEFAULT_PORT = 4444;
+	public static final int DEFAULT_PORT = 4444;
 	
 	/**
-	 * The server uses the listener to forward information
-	 * that is received by its connections.
+	 * The server uses the listener to forward information that is received
+	 * by its connections.
 	 */
 	private SocketConnectionListener listener;
 	
 	/**
-	 * 
-	 * @param listener
-	 * @param context
-	 * @param backlog
+	 * Constructs a new SSL secured sever socket and then begins accepting
+	 * connections.
+	 * @param listener The listener for the sockets.
+	 * @param context The context with which to construct the SSLServerSocket.
+	 * @param backlog The maximum number of open connections that this server
+	 * will allow.
 	 */
 	public Server(final SocketConnectionListener listener, final SSLContext context, final int backlog) {
 		this.factory = context.getServerSocketFactory();
@@ -110,20 +113,26 @@ public class Server implements SocketConnectionListener {
 		}
 	}
 	
+	/**
+	 * Begin accepting connections on the server socket in a background thread.
+	 */
 	public void beginListening() {
 		if (isListening || serverThread != null) {
-			System.out.println("Server.beginListening() called, but server is already listening");
+			System.err.println("Server.beginListening() called, but server is already listening");
 			return;
 		}
 		isListening = true;
 		serverThread = new Thread() {
 			public void run() {
-				Server.this.run();
+				Server.this.listen();
 			}
 		};
 		serverThread.start();
 	}
 	
+	/**
+	 * Closes the underlying server socket and closes all open connections.
+	 */
 	public void stopListening() {
 		try {
 			serverSocket.close();
@@ -144,7 +153,10 @@ public class Server implements SocketConnectionListener {
 		this.isListening = false;
 	}
 	
-	public void run() {
+	/**
+	 * The listens for outside connections.
+	 */
+	public void listen() {
 		try {
 			serverSocket = this.factory.createServerSocket(port, backlog);
 		} catch (IOException e1) {
@@ -169,17 +181,29 @@ public class Server implements SocketConnectionListener {
 	}
 	
 	@Override
+	/**
+	 * Forwards the message along to the listener registered with the server.
+	 * @param conn The socket that started listening.
+	 */
 	public void socketStartedListening(final SocketConnection conn) {
 		assert(this.clientConnections.contains(conn));
 		this.listener.socketStartedListening(conn);
 	}
 
 	@Override
+	/**
+	 * Forwards the received object along to the listener registered with the server.
+	 * @param The object that was read.
+	 */
 	public void socketReceivedObject(final Object obj) {
 		this.listener.socketReceivedObject(obj);
 	}
 
 	@Override
+	/**
+	 * Forwards the stop message to the registered listener. In addition the server will
+	 * remove the connection from its list of open connections.
+	 */
 	public void socketStoppedListening(final SocketConnection conn) {
 		assert(this.clientConnections.contains(conn));
 		this.clientConnections.remove(conn);

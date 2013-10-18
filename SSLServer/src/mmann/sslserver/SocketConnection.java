@@ -1,3 +1,4 @@
+package mmann.sslserver;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -9,43 +10,94 @@ import java.net.SocketException;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
 
+/**
+ * A class that encapsulates basic SSL socket functionality.
+ * @author Mark
+ * @version 1
+ */
 public final class SocketConnection {
 	
+	/**
+	 * The underlying socket for the SSL socket connection.
+	 */
 	private Socket connection;
+	
+	/**
+	 * The thread that runs in the background to communicate with the socket.
+	 */
 	private Thread connectionThread;
+	
+	/**
+	 * Indicates whether or not the socket is currently
+	 * listening to its input and output streams.
+	 */
 	private boolean isListening = false, closed = false;
+	
+	/**
+	 * The object output stream that the socket uses to send
+	 * objects to the other application.
+	 */
 	private ObjectOutputStream outStream;
+	
+	/**
+	 * The input stream through which the socket receives
+	 * objects from the other program.
+	 */
 	private ObjectInputStream inStream;
 	
-	private SocketConnectionListener socketListener;
+	/**
+	 * A connection listener which is kept updated on the
+	 * status of the underlying socket.
+	 */
+	private SocketConnectionListener listener;
 	
+	/**
+	 * The maximum amount of time that this connection will wait
+	 * for the thread to die.
+	 */
 	private static final int MAX_JOIN_TIME = 1000;
 	
 	/**
-	 * Constructs a new SocketConnection that attempts to connect to 
-	 * @param host
-	 * @param listener
+	 * Constructs a new SocketConnection that attempts to connect to the given host.
+	 * The underlying socket is constructed using the default SSLContext.
+	 * @param host The server's name.
+	 * @param port The server port to connect to.
 	 */
-	public SocketConnection(String host, SocketConnectionListener listener, final int port) {
-		this(new InetSocketAddress(host, port), listener);
+	public SocketConnection(final String host, final int port) {
+		this.connection = initializeAndReturnSocket(new InetSocketAddress(host, port), null);
 	}
 	
 	/**
-	 * 
-	 * @param host
-	 * @param listener
-	 * @param context
+	 * Constructs a new SocketConnection that attempts to connect to the given host.
+	 * The underlying socket is constructed using the default SSLContext.
+	 * @param host The server's name.
+	 * @param port The server port to connect to.
+	 * @param listener The connection listener.
 	 */
-	public SocketConnection(String host, SocketConnectionListener listener, SSLContext context, final int port) {
-		this(new InetSocketAddress(host, port), listener, context);
+	public SocketConnection(final String host, final int port, final SocketConnectionListener listener) {
+		
 	}
 	
-	private SocketConnection(InetSocketAddress socketAddress, SocketConnectionListener listener) {
-		this(initializeAndReturnSocket(socketAddress, null), listener);
+	/**
+	 * Constructs a new SocketConnection that attempts to connect to the given host.
+	 * @param host The server's name.
+	 * @param port The server port to connect to.
+	 * @param context The secure socket context to construct a new SSLSocket from.
+	 */
+	public SocketConnection(final String host, final int port, final SSLContext context) {
+		this.connection = initializeAndReturnSocket(new InetSocketAddress(host, port), context);
 	}
 	
-	private SocketConnection(InetSocketAddress socketAddress, SocketConnectionListener listener, SSLContext context) {
-		this(initializeAndReturnSocket(socketAddress, context), listener);
+	/**
+	 * Constructs a new SocketConnection that attempts to connect to the given host.
+	 * @param host The server's name.
+	 * @param port The server port number to connect to.
+	 * @param context The secure socket context to construct a new SSLSocket from.
+	 * @param listener The connection listener.
+	 */
+	public SocketConnection(final String host, final int port, final SSLContext context, final SocketConnectionListener listener) {
+		this.connection = initializeAndReturnSocket(new InetSocketAddress(host, port), context);
+		this.listener = listener;
 	}
 	
 	/**
@@ -55,12 +107,7 @@ public final class SocketConnection {
 	 * @param listener The connection listener.
 	 */
 	public SocketConnection(Socket socket, SocketConnectionListener listener) {
-		connectionThread = new Thread() {
-			public void run() {
-				SocketConnection.this.run();
-			}
-		};
-		this.socketListener = listener;
+		this.listener = listener;
 		this.connection = socket;
 		try {
 			socket.setKeepAlive(true);
@@ -71,30 +118,38 @@ public final class SocketConnection {
 	}
 	
 	/**
+	 * Replaces the old connection listener with the given listener.
+	 * @param listener The new connection listener to send events to.
+	 */
+	public void setConnectionListener(final SocketConnectionListener listener) {
+		this.listener = listener;
+	}
+	
+	/**
 	 * Creates and returns an SSLSocket that is bound and connected to the given socket address.
 	 * @param socketAddress The address to try to connect to.
 	 * @param context The secure socket layer context to use when creating the socket.
 	 * @return A socket that is connected to the {@code socketAddress} that uses the given {@code context}.
 	 */
 	private static Socket initializeAndReturnSocket(InetSocketAddress socketAddress, SSLContext context) {
-		Socket conn = null;
+		Socket socket = null;
 		try {
 			if (context == null) {
-				conn = SSLSocketFactory.getDefault().createSocket();
+				socket = SSLSocketFactory.getDefault().createSocket();
 			} else {
-				conn = context.getSocketFactory().createSocket();
+				socket = context.getSocketFactory().createSocket();
 			}
-			conn.connect(socketAddress);
+			socket.connect(socketAddress);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		return conn;
+		return socket;
 	}
 
 	/**
-	 * The run loop for the socket connection.
+	 * Continuously listens until we stop listening on the socket.
 	 */
-	private void run() {
+	private void listen() {
 		while (this.isListening) {
 			readObject();
 		}
@@ -127,33 +182,17 @@ public final class SocketConnection {
 			return;
 		}
 		this.isListening = true;
-		try {
-			this.setupStreams();
-			connectionThread.start();
-			socketListener.socketStartedListening(this);
-		} catch (NullPointerException e) {
-			e.printStackTrace();
-		}
-	}
-	
-	/**
-	 * Reads an object from the input stream and then calls the
-	 * listeners socketReceivedObject method.
-	 */
-	private void readObject() {
-		if (inStream == null || this.closed) {
-			return;
-		}
-		try {
-			socketListener.socketReceivedObject(inStream.readObject());
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			// The IO exceptions are thrown when the underlying stream is bad, when the socket is closed on either end.
-			this.closeConnections();
-		} catch (Exception e) {
-			System.out.println("We shall hopefully never reach this statement");
-			e.printStackTrace();
+		
+		connectionThread = new Thread() {
+			public void run() {
+				SocketConnection.this.listen();
+			}
+		};
+		connectionThread.start();
+		this.setupStreams();
+		
+		if (listener != null) {
+			listener.socketStartedListening(this);
 		}
 	}
 	
@@ -194,7 +233,30 @@ public final class SocketConnection {
 	}
 	
 	/**
-	 * Closes all connections and then sets the closed flag.
+	 * Reads an object from the input stream and then calls the
+	 * listeners socketReceivedObject method.
+	 */
+	private void readObject() {
+		if (inStream == null || this.closed) {
+			return;
+		}
+		try {
+			if (listener != null) {
+				listener.socketReceivedObject(inStream.readObject());
+			}
+		} catch (ClassNotFoundException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			// The IO exceptions are thrown when the underlying stream is bad, when the socket is closed on either end.
+			this.closeConnections();
+		} catch (Exception e) {
+			System.err.println("We shall hopefully never reach this statement");
+			e.printStackTrace();
+		}
+	}
+	
+	/**
+	 * Closes all connections, and then notifies the listener that this socket is closed.
 	 */
 	private synchronized void closeConnections() {
 		if (this.closed) {
@@ -207,8 +269,8 @@ public final class SocketConnection {
 		closeSocket();
 		isListening = false;
 		joinConnectionThread();
-		if (socketListener != null) {
-			socketListener.socketStoppedListening(this);
+		if (listener != null) {
+			listener.socketStoppedListening(this);
 		}
 	}
 	
